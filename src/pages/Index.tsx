@@ -23,7 +23,7 @@ interface Report {
   user_id: string;
   profiles: {
     full_name: string;
-  };
+  } | null;
 }
 
 const Index = () => {
@@ -41,26 +41,30 @@ const Index = () => {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // First get reports
+      const { data: reportsData, error: reportsError } = await supabase
         .from('reports')
-        .select(`
-          id,
-          title,
-          description,
-          location,
-          category,
-          image_url,
-          true_votes,
-          false_votes,
-          is_disputed,
-          created_at,
-          user_id,
-          profiles(full_name)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setReports(data || []);
+      if (reportsError) throw reportsError;
+
+      // Then get profiles for the report user IDs
+      const userIds = reportsData?.map(report => report.user_id) || [];
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', userIds);
+
+      if (profilesError) throw profilesError;
+
+      // Combine the data
+      const reportsWithProfiles = reportsData?.map(report => ({
+        ...report,
+        profiles: profilesData?.find(profile => profile.id === report.user_id) || null
+      })) || [];
+
+      setReports(reportsWithProfiles);
     } catch (error) {
       console.error('Error fetching reports:', error);
     } finally {

@@ -15,7 +15,7 @@ interface Comment {
   user_id: string;
   profiles: {
     full_name: string;
-  };
+  } | null;
 }
 
 interface CommentsSectionProps {
@@ -37,20 +37,31 @@ export const CommentsSection = ({ reportId }: CommentsSectionProps) => {
   const fetchComments = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // First get comments
+      const { data: commentsData, error: commentsError } = await supabase
         .from('comments')
-        .select(`
-          id,
-          content,
-          created_at,
-          user_id,
-          profiles(full_name)
-        `)
+        .select('*')
         .eq('report_id', reportId)
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
-      setComments(data || []);
+      if (commentsError) throw commentsError;
+
+      // Then get profiles for the comment user IDs
+      const userIds = commentsData?.map(comment => comment.user_id) || [];
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', userIds);
+
+      if (profilesError) throw profilesError;
+
+      // Combine the data
+      const commentsWithProfiles = commentsData?.map(comment => ({
+        ...comment,
+        profiles: profilesData?.find(profile => profile.id === comment.user_id) || null
+      })) || [];
+
+      setComments(commentsWithProfiles);
     } catch (error: any) {
       console.error('Error fetching comments:', error);
     } finally {

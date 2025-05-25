@@ -24,7 +24,7 @@ interface Report {
   user_id: string;
   profiles: {
     full_name: string;
-  };
+  } | null;
 }
 
 interface Vote {
